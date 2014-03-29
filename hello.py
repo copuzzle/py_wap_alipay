@@ -13,8 +13,10 @@ class MainHandler(tornado.web.RequestHandler):
 
 
 class Alipay(tornado.web.RedirectHandler):
-    from wap_alipay import submit
-    pay_url = submit.get_pay_url('123456789', '给我一支烟钱', 1.01)
+    def get(self):
+        from wap_alipay import submit
+        pay_url = submit.get_pay_url('123456789', '给我一支烟钱', 1.01)
+        self.write({"pay_url": pay_url})
 
 application = tornado.web.Application([
     (r"/", MainHandler),
