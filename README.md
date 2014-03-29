@@ -6,6 +6,8 @@ py_wap_alipay
 
 core.py 文件里排序，过滤等函数引用自 [python-alipay](https://github.com/yefei/python-alipay) 这个版本的代码
 
+目前只实现MD5加密方式
+
 My Email: <copuzzle@gmail.com>   
   
  
@@ -13,8 +15,8 @@ My Email: <copuzzle@gmail.com>
 ----
 - ####即时到账  
 ```
-	from wap_alipay import submit  
-	pay_url = submit.get_pay_ur(tn, subject, body, total_fee)
+from wap_alipay import submit
+pay_url = submit.get_pay_ur(tn, subject, body, total_fee)
 ```
 	tn - 'out_trade_no', 网站订单系统中唯一订单匹配号   
 	subject - 'subject', 订单名称   
