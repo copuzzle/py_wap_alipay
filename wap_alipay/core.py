@@ -4,6 +4,7 @@ import types
 from urllib import urlencode, urlopen
 import xml.etree.ElementTree as etree
 from hashcompat import md5_constructor as md5
+import xml.etree.ElementTree as etree
 from config import Settings
 
 
@@ -68,6 +69,24 @@ def params_filter(params):
     return new_params, prestr
 
 
+def fix_params_filter(params):
+    """ 对字典排序并除去数组中的空值和签名参数
+
+    返回数组和链接串
+    """
+    ks = params.keys()
+    new_params = {}
+    prestr = ''
+    for k in ks:
+        v = params[k]
+        k = smart_str(k, Settings.INPUT_CHARSET)
+        if k not in ('sign', 'sign_type') and v != '':
+            new_params[k] = smart_str(v, Settings.INPUT_CHARSET)
+    prestr = "service=%s&v=%s&sec_id=%s&notify_data=%s" % (new_params["service"], new_params["v"],
+                                                           new_params["sec_id"], new_params["notify_data"])
+    return new_params, prestr
+
+
 def build_mysign(prestr, key, sign_type='MD5'):
     """生成请求时的签名
 
@@ -80,32 +99,48 @@ def build_mysign(prestr, key, sign_type='MD5'):
 
 
 def notify_verify(post):
-    """初级验证---签名
+    """验证---签名&&数据是否支付宝发送
 
     """
-    _, prestr = params_filter(post)
+    #初级验证---签名
+    order_params = {}
+    params = {}
+    _, prestr = fix_params_filter(post)
     mysign = build_mysign(prestr, Settings.KEY, Settings.SIGN_TYPE)
     if mysign != post.get('sign'):
         return False
-    return atn_verify(post.get('notify_id'))
+    tree = etree.fromstring(post["notify_data"])
+    notify_id = tree.find("notify_id").text
+    order_params["trade_no"] = tree.find("trade_no").text
+    order_params["out_trade_no"] = tree.find("out_trade_no").text
+    order_params["trade_status"] = tree.find("trade_status").text
+    order_params["total_fee"] = tree.find("total_fee").text
+
+    #二级验证---数据是否支付宝发送
+    if notify_id:
+        params['partner'] = Settings.PARTNER
+        params['notify_id'] = notify_id
+        if Settings.TRANSPORT == 'https':
+            params['service'] = 'notify_verify'
+            gateway = 'https://mapi.alipay.com/gateway.do'
+        else:
+            gateway = 'http://notify.alipay.com/trade/notify_query.do'
+        verify_url = "%s?%s" % (gateway, urlencode(params))
+        verify_result = urlopen(verify_url).read()
+        if verify_result.lower().strip() == 'true':
+            return order_params
+    return False
 
 
-def atn_verify(notify_id):
-    """二级验证--查询支付宝服务器此条信息是否有效
+def return_verify(query_params):
+    """同步通知验证
 
     """
-    params = {}
-    params['partner'] = Settings.PARTNER
-    params['notify_id'] = notify_id
-    if Settings.TRANSPORT == 'https':
-        params['service'] = 'notify_verify'
-        gateway = 'https://mapi.alipay.com/gateway.do'
-    else:
-        gateway = 'http://notify.alipay.com/trade/notify_query.do'
-    verify_result = urlopen(gateway, urlencode(params)).read()
-    if verify_result.lower().strip() == 'true':
-        return True
-    return False
+    _, prestr = params_filter(query_params)
+    mysign = build_mysign(prestr, Settings.KEY, Settings.SIGN_TYPE)
+    if mysign != query_params.get('sign'):
+        return False
+    return True
 
 
 def query_timestamp():
